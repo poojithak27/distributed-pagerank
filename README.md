@@ -1,6 +1,6 @@
 # Distributed PageRank with MPI
 
-Parallel implementation of the **PageRank algorithm** using the taxation model across a directed web graph (~10M nodes, ~10M edges), executed on the [SeaWulf HPC cluster](https://it.stonybrook.edu/services/high-performance-computing) at Stony Brook University with **5 MPI ranks** via `mpi4py`.
+Parallel implementation of the Pagerank Algorithm using the taxation model across a directed web graph (~10M nodes, ~10M edges), executed on the [SeaWulf HPC cluster](https://it.stonybrook.edu/services/high-performance-computing) at Stony Brook University with **5 MPI ranks** via `mpi4py`.
 
 ---
 
