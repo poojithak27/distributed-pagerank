@@ -1,0 +1,24 @@
+# Distributed PageRank — Final Results
+# SeaWulf HPC | 5 MPI ranks | beta=0.9 | 4 iterations
+# ~10 million nodes, ~10 million edges
+# Runtime: ~8–10 minutes
+# ============================================================
+
+Top 10 webpages by PageRank (beta=0.9, iters=4):
+
+ 1. node=   2817335  pr=2.186196173309e-05
+ 2. node=   9423027  pr=2.162894237507e-05
+ 3. node=   3465571  pr=2.133395836116e-05
+ 4. node=   5132918  pr=2.100575117253e-05
+ 5. node=   6813130  pr=2.087436568699e-05
+ 6. node=   8065384  pr=2.071829401802e-05
+ 7. node=   1460753  pr=2.070437074436e-05
+ 8. node=   4159429  pr=1.829233086236e-05
+ 9. node=   7495117  pr=1.584944578402e-05
+10. node=    878533  pr=1.547293941112e-05
+
+Validation:
+  - Sum of all PageRank values ≈ 1.0 (correctly normalized)
+  - No negative or NaN values found
+  - Each iteration CSV contained ~10 million rows
+  - Top rankings stabilized after iteration 3
