@@ -167,22 +167,6 @@ With N ≈ 10 million nodes, a uniform distribution gives each node `1/N ≈ 10�
 
 ---
 
-## Resume / LinkedIn Bullet Points
-
-**1. Distributed Graph Algorithm on HPC**
-Implemented the PageRank taxation model across a ~10M-node web graph using 5 MPI ranks on SeaWulf, distributing edge-list files round-robin and merging contributions via `MPI.Allreduce` at each iteration.
-Correctly handled dangling nodes to maintain probability mass normalization, producing validated output where all scores summed to 1.0 with no NaN values.
-
-**2. Large-Scale Parallel Data Processing**
-Processed ~10 million edges across partitioned input files with no intermediate file I/O between processes — all inter-rank communication done through collective MPI operations.
-Achieved convergence in 4 iterations (~8–10 min runtime), with top-ranked nodes stabilizing after iteration 3 and results written as both CSV and JSON for reproducibility.
-
-**3. End-to-End HPC Pipeline with SLURM**
-Built a complete parallel pipeline from edge-list ingestion to ranked output, scheduled via SLURM on a 28-core debug partition with environment validation and structured logging baked in.
-Designed the system to scale to any number of MPI processes using hash-based or round-robin sharding, making the implementation adaptable beyond the 5-rank assignment configuration.
-
----
-
 ## Skills & Tools
 
 `Python` · `mpi4py` · `NumPy` · `PageRank` · `MPI` · `SLURM` · `HPC` · `Graph Algorithms` · `Distributed Computing` · `Big Data`
