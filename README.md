@@ -1,12 +1,53 @@
-# Distributed PageRank with MPI
+# Distributed PageRank with MPI + REST API
 
-Parallel implementation of the Pagerank Algorithm using the taxation model across a directed web graph (~10M nodes, ~10M edges), executed on the [SeaWulf HPC cluster](https://it.stonybrook.edu/services/high-performance-computing) at Stony Brook University with **5 MPI ranks** via `mpi4py`.
+A distributed graph processing pipeline that computes PageRank across a **~10M node, ~10M edge** web graph using 5 parallel MPI workers on an HPC cluster, with results served via a **FastAPI REST API**.
 
 ---
 
-## Overview
+## System Architecture
 
-PageRank is computed iteratively using the taxation (random-surfer) model. The graph is stored as edge-list files partitioned across disk; each MPI rank loads a subset of files, builds a local adjacency list, and contributes to the global PageRank vector via `MPI.Allreduce` at every iteration. Dangling nodes (out-degree 0) are handled explicitly so the probability mass stays normalized.
+```
+Edge-list files (partitioned)
+        ↓
+Distributed MPI computation (5 workers, SeaWulf HPC)
+  - Round-robin file sharding across ranks
+  - Local adjacency list per worker
+  - Contributions merged via MPI.Allreduce each iteration
+        ↓
+PageRank scores for ~10M nodes (4 iterations, β=0.9)
+        ↓
+FastAPI REST API — query scores by node, get top-K rankings
+```
+
+---
+
+## API Endpoints
+
+Start the server:
+```bash
+pip install fastapi uvicorn
+python -m uvicorn api:app --reload
+```
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Health check |
+| GET | `/top?k=10` | Top-K nodes by PageRank score |
+| GET | `/pagerank/{node_id}` | Score for a specific node |
+
+Interactive docs available at `http://127.0.0.1:8000/docs`
+
+Example response for `/top?k=3`:
+```json
+{
+  "top_k": 3,
+  "results": [
+    {"rank": 1, "node_id": 2817335, "pr": 2.186196e-05},
+    {"rank": 2, "node_id": 9423027, "pr": 2.162894e-05},
+    {"rank": 3, "node_id": 3465571, "pr": 2.133396e-05}
+  ]
+}
+```
 
 ---
 
@@ -14,11 +55,12 @@ PageRank is computed iteratively using the taxation (random-surfer) model. The g
 
 ```
 distributed-pagerank/
-├── pagerank_mpi.py          # Main distributed PageRank solver
-├── pagerank_mpi.slurm       # SLURM job script for SeaWulf HPC
-├── requirements.txt         # Python dependencies
+├── pagerank_mpi.py        # Distributed PageRank solver (MPI)
+├── api.py                 # FastAPI REST API
+├── pagerank_mpi.slurm     # SLURM job script for SeaWulf HPC
+├── requirements.txt       # Python dependencies
 ├── results/
-│   └── top10_pagerank.txt   # Final top-10 ranked nodes
+│   └── top10_pagerank.txt # Final top-10 ranked nodes
 └── README.md
 ```
 
@@ -33,106 +75,80 @@ PR^(t+1)(v) = (1-β)/N  +  β * Σ_{u∈In(v)} PR^(t)(u) / outdeg(u)  +  β * D^
 ```
 
 where:
-- `β = 0.9` is the damping factor
-- `N` is the total number of distinct nodes
-- `D^(t)` is the total PageRank mass held by dangling nodes at iteration `t`
+- `β = 0.9` — damping factor
+- `N` — total distinct nodes
+- `D^(t)` — PageRank mass held by dangling nodes (out-degree 0) at iteration `t`
 
 ### Execution Phases
 
 | Phase | Description |
 |-------|-------------|
-| **1. File loading** | Each rank reads its assigned files and builds a local adjacency list |
-| **2. Node indexing** | Rank 0 aggregates all node IDs into a global index; broadcast to all ranks |
-| **3. Out-degree computation** | Local out-degrees merged via `Allreduce` into a global array |
-| **4. Iteration** | 4 rounds of the PageRank update; contributions merged via `Allreduce` per round |
-| **5. Output** | Rank 0 writes per-iteration CSVs and final top-10 files |
+| 1. File loading | Each rank reads its assigned files, builds a local adjacency list |
+| 2. Node indexing | Rank 0 aggregates all node IDs into a global index, broadcasts to all ranks |
+| 3. Out-degree computation | Local out-degrees merged via `Allreduce` into a global array |
+| 4. Iteration | 4 rounds of PageRank update, contributions merged via `Allreduce` per round |
+| 5. Output | Rank 0 writes per-iteration CSVs and final top-10 files |
 
-### File Distribution
+### File Sharding
 
-Files are assigned round-robin across ranks:
+Round-robin by default:
 ```
 file i → rank (i mod num_processes)
 ```
-An alternative `--hash_mod_source` flag shards by `hash(source_node) % size` for single large files.
-
----
-
-## Configuration
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `--beta`  | 0.9   | Damping factor |
-| `--iters` | 4     | Number of iterations |
-| MPI ranks | 5     | One per input file partition |
-| Nodes     | ~10M  | Distinct nodes in the graph |
-| Edges     | ~10M  | Total directed edges |
+Alternative: `--hash_mod_source` shards by `hash(source_node) % size` for single large files.
 
 ---
 
 ## Setup
 
 ### Dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
-
-Requires an MPI installation (MPICH or OpenMPI) and `mpi4py`.
+Requires an MPI installation (MPICH or OpenMPI) for the distributed solver.
 
 ### Data
 
-Edge-list files live at (SeaWulf):
+Edge-list files (SeaWulf path):
 ```
 /gpfs/projects/AMS598/projects2025_data/project2_data/
 ```
-Each line is a pair `u v` or `u, v` representing a directed edge u → v. Data is not included in this repo due to size.
+Each line is a pair `u v` or `u, v` representing a directed edge u → v. Data not included due to size.
 
 ---
 
 ## Running
 
-### On SeaWulf HPC (SLURM)
-
+### Distributed solver on SeaWulf HPC
 ```bash
 sbatch pagerank_mpi.slurm
 ```
 
-Monitor with:
+Monitor:
 ```bash
 squeue -j <JOBID>
 sacct  -j <JOBID>
 ```
 
-### Locally (any MPI install)
-
+### Locally
 ```bash
 mpirun -np 5 python3 pagerank_mpi.py \
     --input  /path/to/edge/files \
-    --outdir ./outputs \
+    --outdir ./results \
     --beta   0.9 \
     --iters  4
 ```
 
 ---
 
-## Output Files
-
-| File | Description |
-|------|-------------|
-| `pagerank_iter_1.csv` … `pagerank_iter_4.csv` | All ~10M node scores after each iteration |
-| `top10_pagerank.txt` | Top-10 nodes by final PageRank score |
-| `top10_pagerank.json` | Same results in JSON format |
-
----
-
 ## Results
 
-Runtime on SeaWulf: **~8–10 minutes** (1 node, 5 MPI ranks, debug-28core partition).
+Runtime on SeaWulf: **~8–10 minutes** (1 node, 5 MPI ranks, debug-28core partition)
 
 ### Top 10 Nodes by PageRank
 
 | Rank | Node ID | PageRank Score |
-|------|---------|---------------|
+|------|---------|----------------|
 | 1 | 2817335 | 2.186196e-05 |
 | 2 | 9423027 | 2.162894e-05 |
 | 3 | 3465571 | 2.133396e-05 |
@@ -145,31 +161,28 @@ Runtime on SeaWulf: **~8–10 minutes** (1 node, 5 MPI ranks, debug-28core parti
 | 10 | 878533 | 1.547294e-05 |
 
 ### Validation
-
 - Sum of all PageRank values ≈ 1.0 (correctly normalized at each iteration)
-- No negative or NaN values found in any output
+- No negative or NaN values in any output
 - Rankings stabilized after iteration 3, indicating near-convergence
-- Each CSV contained ~10 million rows
+- Each iteration CSV contained ~10 million rows
 
-### Why scores are ~10⁻⁵
-
-With N ≈ 10 million nodes, a uniform distribution gives each node `1/N ≈ 10⁻⁷`. The top nodes here score ~200× higher than average, reflecting genuine hub structure in the web graph.
+Top nodes score ~200× above the uniform baseline (`1/N ≈ 10⁻⁷`), reflecting genuine hub structure in the graph.
 
 ---
 
 ## Key Design Decisions
 
-- **No file I/O between ranks** — all communication via `MPI.Allreduce`
-- **Dangling node handling** — mass from zero-out-degree nodes is redistributed uniformly at each iteration, preserving normalization
-- **Round-robin file assignment** — works for any number of MPI processes
-- **Re-normalization** — PageRank vector is normalized after each iteration to prevent floating-point drift
-- **`HYDRA_LAUNCHER=fork`** — required to avoid launcher conflicts on SeaWulf
+- **No file I/O between ranks** — all inter-process communication via `MPI.Allreduce`
+- **Dangling node handling** — probability mass from zero-out-degree nodes redistributed uniformly each iteration
+- **Round-robin sharding** — works for any number of MPI processes, no hardcoded rank count
+- **Re-normalization** — PageRank vector normalized after each iteration to prevent floating-point drift
+- **REST API layer** — FastAPI serves precomputed results with automatic OpenAPI docs at `/docs`
 
 ---
 
-## Skills & Tools
+## Tech Stack
 
-`Python` · `mpi4py` · `NumPy` · `PageRank` · `MPI` · `SLURM` · `HPC` · `Graph Algorithms` · `Distributed Computing` · `Big Data`
+`Python` · `FastAPI` · `mpi4py` · `NumPy` · `MPI` · `SLURM` · `HPC` · `Distributed Computing` · `REST API` · `Graph Algorithms`
 
 ---
 
